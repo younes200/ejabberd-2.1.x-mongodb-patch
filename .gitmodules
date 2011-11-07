@@ -1,0 +1,6 @@
+[submodule "sources/ejabberd_mongo"]
+	path = sources/ejabberd_mongo
+	url = https://github.com/master/ejabberd.git
+[submodule "sources/ejabberd_2.1.x"]
+	path = sources/ejabberd_2.1.x
+	url = https://github.com/processone/ejabberd.git
