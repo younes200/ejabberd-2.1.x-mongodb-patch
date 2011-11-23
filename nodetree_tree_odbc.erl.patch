@@ -1,0 +1,89 @@
+*** sources/ejabberd_2.1.x/src/mod_pubsub/nodetree_tree_odbc.erl	2011-11-23 01:37:21.000000000 +0100
+--- sources/ejabberd_mongo/src/mod_pubsub/nodetree_tree_odbc.erl	2011-11-23 01:37:38.000000000 +0100
+***************
+*** 11,22 ****
+  %%% under the License.
+  %%% 
+  %%% The Initial Developer of the Original Code is ProcessOne.
+! %%% Portions created by ProcessOne are Copyright 2006-2011, ProcessOne
+  %%% All Rights Reserved.''
+! %%% This software is copyright 2006-2011, ProcessOne.
+  %%%
+  %%%
+! %%% @copyright 2006-2011 ProcessOne
+  %%% @author Christophe Romain <christophe.romain@process-one.net>
+  %%%   [http://www.process-one.net/]
+  %%% @version {@vsn}, {@date} {@time}
+--- 11,22 ----
+  %%% under the License.
+  %%% 
+  %%% The Initial Developer of the Original Code is ProcessOne.
+! %%% Portions created by ProcessOne are Copyright 2006-2010, ProcessOne
+  %%% All Rights Reserved.''
+! %%% This software is copyright 2006-2010, ProcessOne.
+  %%%
+  %%%
+! %%% @copyright 2006-2010 ProcessOne
+  %%% @author Christophe Romain <christophe.romain@process-one.net>
+  %%%   [http://www.process-one.net/]
+  %%% @version {@vsn}, {@date} {@time}
+***************
+*** 265,273 ****
+      H = ?PUBSUB:escape(Host),
+      N = ?PUBSUB:escape(?PUBSUB:node_to_string(Node)),
+      Removed = get_subnodes_tree(Host, Node),
+!     catch ejabberd_odbc:sql_query_t(
+! 	    ["delete from pubsub_node "
+! 	     "where host='", H, "' and node like '", N, "%';"]),
+      Removed.
+  
+  %% helpers
+--- 265,290 ----
+      H = ?PUBSUB:escape(Host),
+      N = ?PUBSUB:escape(?PUBSUB:node_to_string(Node)),
+      Removed = get_subnodes_tree(Host, Node),
+!     case catch ejabberd_odbc:sql_query_t(
+!                  ["select nodeid from pubsub_node "
+!                   "where host='", H, "' and node like '", N, "%';"]) of
+!         {selected, ["nodeid"], [{I}]} ->
+!             catch ejabberd_odbc:sql_query_t(
+!                     ["delete from pubsub_node "
+!                      "where host='", H, "' and node like '", N, "%';"]),
+!             catch ejabberd_odbc:sql_query_t(
+!                     ["delete from pubsub_node_option where nodeid='", I, "';"]),
+!             catch ejabberd_odbc:sql_query_t(
+!                     ["delete from pubsub_node_owner where nodeid='", I, "';"]),
+!             catch ejabberd_odbc:sql_query_t(
+!                     ["delete from pubsub_state where nodeid='", I, "';"]),
+!             catch ejabberd_odbc:sql_query_t(
+!                     ["delete from pubsub_item where nodeid='", I, "';"]);
+!         _ ->
+!             catch ejabberd_odbc:sql_query_t(
+!                     ["delete from pubsub_node "
+!                      "where host='", H, "' and node like '", N, "%';"])
+!     end,
+      Removed.
+  
+  %% helpers
+***************
+*** 326,334 ****
+  			      "where nodeid='", OldNodeId, "';"]),
+  		     OldNodeId;
+  		 _ ->
+  		     catch ejabberd_odbc:sql_query_t(
+! 			     ["insert into pubsub_node(host, node, parent, type) "
+! 			      "values('", H, "', '", N, "', '", P, "', '", Type, "');"]),
+  		     case nodeid(Host, Node) of
+  			 {result, NewNodeId} -> NewNodeId;
+  			 _ -> none  % this should not happen
+--- 343,352 ----
+  			      "where nodeid='", OldNodeId, "';"]),
+  		     OldNodeId;
+  		 _ ->
++ 		     I = randoms:get_string(),
+  		     catch ejabberd_odbc:sql_query_t(
+! 			     ["insert into pubsub_node(nodeid, host, node, parent, type) "
+! 			      "values('", I, "', '", H, "', '", N, "', '", P, "', '", Type, "');"]),
+  		     case nodeid(Host, Node) of
+  			 {result, NewNodeId} -> NewNodeId;
+  			 _ -> none  % this should not happen

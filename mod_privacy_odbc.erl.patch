@@ -1,0 +1,207 @@
+*** sources/ejabberd_2.1.x/src/mod_privacy_odbc.erl	2011-11-23 01:37:21.000000000 +0100
+--- sources/ejabberd_mongo/src/mod_privacy_odbc.erl	2011-11-23 01:37:38.000000000 +0100
+***************
+*** 5,11 ****
+  %%% Created :  5 Oct 2006 by Alexey Shchepin <alexey@process-one.net>
+  %%%
+  %%%
+! %%% ejabberd, Copyright (C) 2002-2011   ProcessOne
+  %%%
+  %%% This program is free software; you can redistribute it and/or
+  %%% modify it under the terms of the GNU General Public License as
+--- 5,11 ----
+  %%% Created :  5 Oct 2006 by Alexey Shchepin <alexey@process-one.net>
+  %%%
+  %%%
+! %%% ejabberd, Copyright (C) 2002-2010   ProcessOne
+  %%%
+  %%% This program is free software; you can redistribute it and/or
+  %%% modify it under the terms of the GNU General Public License as
+***************
+*** 538,565 ****
+  	{selected, ["name"], []} ->
+  	    #userlist{};
+  	{selected, ["name"], [{Default}]} ->
+! 	    case catch sql_get_privacy_list_data(LUser, LServer, Default) of
+! 		{selected, ["t", "value", "action", "ord", "match_all",
+! 			    "match_iq", "match_message",
+! 			    "match_presence_in", "match_presence_out"],
+! 		 RItems} ->
+! 		    Items = lists:map(fun raw_to_item/1, RItems),
+! 		    NeedDb = is_list_needdb(Items),
+! 		    #userlist{name = Default, list = Items, needdb = NeedDb};
+! 		_ ->
+! 		    #userlist{}
+  	    end;
+  	_ ->
+  	    #userlist{}
+      end.
+  
+  
+- %% From is the sender, To is the destination.
+- %% If Dir = out, User@Server is the sender account (From).
+- %% If Dir = in, User@Server is the destination account (To).
+  check_packet(_, User, Server,
+  	     #userlist{list = List, needdb = NeedDb},
+! 	     {From, To, {xmlelement, PName, Attrs, _}},
+  	     Dir) ->
+      case List of
+  	[] ->
+--- 538,567 ----
+  	{selected, ["name"], []} ->
+  	    #userlist{};
+  	{selected, ["name"], [{Default}]} ->
+! 	    case catch sql_get_privacy_list_id(LUser, LServer, Default) of
+! 		{selected, ["id"], []} ->
+! 		    #userlist{};
+! 		{selected, ["id"], [{ID}]} ->
+! 		    case catch sql_get_privacy_list_data_by_id(ID, LServer) of
+! 			{selected, ["t", "value", "action", "ord", "match_all",
+! 				    "match_iq", "match_message",
+! 				    "match_presence_in", "match_presence_out"],
+! 			 RItems} ->
+! 			    Items = lists:map(fun raw_to_item/1, RItems),
+! 			    NeedDb = is_list_needdb(Items),
+! 			    #userlist{name = Default, list = Items, needdb = NeedDb};
+! 			_ ->
+! 			    #userlist{}
+! 		    end
+  	    end;
+  	_ ->
+  	    #userlist{}
+      end.
+  
+  
+  check_packet(_, User, Server,
+  	     #userlist{list = List, needdb = NeedDb},
+! 	     {From, To, {xmlelement, PName, _, _}},
+  	     Dir) ->
+      case List of
+  	[] ->
+***************
+*** 568,603 ****
+  	    PType = case PName of
+  			"message" -> message;
+  			"iq" -> iq;
+! 			"presence" ->
+! 			    case xml:get_attr_s("type", Attrs) of
+! 				%% notification
+! 				"" -> presence;
+! 				"unavailable" -> presence;
+! 				%% subscribe, subscribed, unsubscribe,
+! 				%% unsubscribed, error, probe, or other
+! 				_ -> other
+! 			    end
+  		    end,
+! 	    PType2 = case {PType, Dir} of
+! 			 {message, in} -> message;
+! 			 {iq, in} -> iq;
+! 			 {presence, in} -> presence_in;
+! 			 {presence, out} -> presence_out;
+! 			 {_, _} -> other
+! 		     end,
+! 	    LJID = case Dir of
+! 		       in -> jlib:jid_tolower(From);
+! 		       out -> jlib:jid_tolower(To)
+! 		   end,
+! 	    {Subscription, Groups} =
+! 		case NeedDb of
+! 		    true -> ejabberd_hooks:run_fold(roster_get_jid_info,
+! 						    jlib:nameprep(Server),
+! 						    {none, []},
+! 						    [User, Server, LJID]);
+! 		    false -> {[], []}
+! 		end,
+! 	    check_packet_aux(List, PType2, LJID, Subscription, Groups)
+      end.
+  
+  check_packet_aux([], _PType, _JID, _Subscription, _Groups) ->
+--- 570,617 ----
+  	    PType = case PName of
+  			"message" -> message;
+  			"iq" -> iq;
+! 			"presence" -> presence
+  		    end,
+! 	    case {PType, Dir} of
+! 		{message, in} ->
+! 		    LJID = jlib:jid_tolower(From),
+! 		    {Subscription, Groups} =
+! 			case NeedDb of
+! 			    true -> ejabberd_hooks:run_fold(roster_get_jid_info, jlib:nameprep(Server), {none, []}, [User, Server, LJID]);
+! 			    false -> {[], []}
+! 			end,
+! 		    check_packet_aux(List, message,
+! 				     LJID, Subscription, Groups);
+! 		{iq, in} ->
+! 		    LJID = jlib:jid_tolower(From),
+! 		    {Subscription, Groups} =
+! 			case NeedDb of
+! 			    true -> ejabberd_hooks:run_fold(roster_get_jid_info, jlib:nameprep(Server), {none, []}, [User, Server, LJID]);
+! 			    false -> {[], []}
+! 			end,
+! 		    check_packet_aux(List, iq,
+! 				     LJID, Subscription, Groups);
+! 		{presence, in} ->
+! 		    LJID = jlib:jid_tolower(From),
+! 		    {Subscription, Groups} =
+! 			case NeedDb of
+! 			    true -> ejabberd_hooks:run_fold(roster_get_jid_info, jlib:nameprep(Server), {none, []}, [User, Server, LJID]);
+! 			    false -> {[], []}
+! 			end,
+! 		    check_packet_aux(List, presence_in,
+! 				     LJID, Subscription, Groups);
+! 		{presence, out} ->
+! 		    LJID = jlib:jid_tolower(To),
+! 		    {Subscription, Groups} =
+! 			case NeedDb of
+! 			    true -> ejabberd_hooks:run_fold(roster_get_jid_info, jlib:nameprep(Server), {none, []}, [User, Server, LJID]);
+! 			    false -> {[], []}
+! 			end,
+! 		    check_packet_aux(List, presence_out,
+! 				     LJID, Subscription, Groups);
+! 		_ ->
+! 		    allow
+! 	    end
+      end.
+  
+  check_packet_aux([], _PType, _JID, _Subscription, _Groups) ->
+***************
+*** 637,645 ****
+  		presence_in ->
+  		    Item#listitem.match_presence_in;
+  		presence_out ->
+! 		    Item#listitem.match_presence_out;
+! 		other ->
+! 		    false
+  	    end
+      end.
+  
+--- 651,657 ----
+  		presence_in ->
+  		    Item#listitem.match_presence_in;
+  		presence_out ->
+! 		    Item#listitem.match_presence_out
+  	    end
+      end.
+  
+***************
+*** 751,759 ****
+  	    none ->
+  		{"n", ""};
+  	    jid ->
+! 		{"j", ejabberd_odbc:escape(jlib:jid_to_string(Value))};
+  	    group ->
+! 		{"g", ejabberd_odbc:escape(Value)};
+  	    subscription ->
+  		case Value of
+  		    none ->
+--- 763,771 ----
+  	    none ->
+  		{"n", ""};
+  	    jid ->
+! 		{"j", jlib:jid_to_string(Value)};
+  	    group ->
+! 		{"g", Value};
+  	    subscription ->
+  		case Value of
+  		    none ->

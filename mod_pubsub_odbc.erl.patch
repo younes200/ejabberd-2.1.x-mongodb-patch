@@ -1,0 +1,115 @@
+*** sources/ejabberd_2.1.x/src/mod_pubsub/mod_pubsub_odbc.erl	2011-11-23 01:37:21.000000000 +0100
+--- sources/ejabberd_mongo/src/mod_pubsub/mod_pubsub_odbc.erl	2011-11-23 01:37:38.000000000 +0100
+***************
+*** 11,21 ****
+  %%% under the License.
+  %%% 
+  %%% The Initial Developer of the Original Code is ProcessOne.
+! %%% Portions created by ProcessOne are Copyright 2006-2011, ProcessOne
+  %%% All Rights Reserved.''
+! %%% This software is copyright 2006-2011, ProcessOne.
+  %%%
+! %%% @copyright 2006-2011 ProcessOne
+  %%% @author Christophe Romain <christophe.romain@process-one.net>
+  %%%   [http://www.process-one.net/]
+  %%% @version {@vsn}, {@date} {@time}
+--- 11,21 ----
+  %%% under the License.
+  %%% 
+  %%% The Initial Developer of the Original Code is ProcessOne.
+! %%% Portions created by ProcessOne are Copyright 2006-2010, ProcessOne
+  %%% All Rights Reserved.''
+! %%% This software is copyright 2006-2010, ProcessOne.
+  %%%
+! %%% @copyright 2006-2010 ProcessOne
+  %%% @author Christophe Romain <christophe.romain@process-one.net>
+  %%%   [http://www.process-one.net/]
+  %%% @version {@vsn}, {@date} {@time}
+***************
+*** 1022,1028 ****
+        [{xmlcdata,
+  	translate:translate(Lang,
+  			    "ejabberd Publish-Subscribe module") ++
+! 			    "\nCopyright (c) 2004-2011 ProcessOne"}]}].
+  
+  iq_pubsub(Host, ServerHost, From, IQType, SubEl, Lang) ->
+      iq_pubsub(Host, ServerHost, From, IQType, SubEl, Lang, all, plugins(ServerHost)).
+--- 1022,1028 ----
+        [{xmlcdata,
+  	translate:translate(Lang,
+  			    "ejabberd Publish-Subscribe module") ++
+! 			    "\nCopyright (c) 2004-2010 ProcessOne"}]}].
+  
+  iq_pubsub(Host, ServerHost, From, IQType, SubEl, Lang) ->
+      iq_pubsub(Host, ServerHost, From, IQType, SubEl, Lang, all, plugins(ServerHost)).
+***************
+*** 1841,1847 ****
+  		    DeliverPayloads = get_option(Options, deliver_payloads),
+  		    PersistItems = get_option(Options, persist_items),
+  		    PayloadCount = payload_xmlelements(Payload),
+! 		    PayloadSize = size(term_to_binary(Payload))-2, % size(term_to_binary([])) == 2
+  		    PayloadMaxSize = get_option(Options, max_payload_size),
+  		    % pubsub#deliver_payloads true 
+  		    % pubsub#persist_items true -> 1 item; false -> 0 item
+--- 1841,1847 ----
+  		    DeliverPayloads = get_option(Options, deliver_payloads),
+  		    PersistItems = get_option(Options, persist_items),
+  		    PayloadCount = payload_xmlelements(Payload),
+! 		    PayloadSize = size(term_to_binary(Payload)),
+  		    PayloadMaxSize = get_option(Options, max_payload_size),
+  		    % pubsub#deliver_payloads true 
+  		    % pubsub#persist_items true -> 1 item; false -> 0 item
+***************
+*** 1877,1895 ****
+  	    NodeId = TNode#pubsub_node.id,
+  	    Type = TNode#pubsub_node.type,
+  	    Options = TNode#pubsub_node.options,
+! 	    case get_option(Options, deliver_notifications) of
+! 			true ->
+! 				BroadcastPayload = case Broadcast of
+! 					default -> Payload;
+! 					broadcast -> Payload;
+! 					PluginPayload -> PluginPayload
+! 				end,
+! 				broadcast_publish_item(Host, Node, NodeId, Type, Options,
+! 					Removed, ItemId, jlib:jid_tolower(Publisher),
+! 					BroadcastPayload);
+! 			false ->
+! 				ok
+! 		end,
+  	    set_cached_item(Host, NodeId, ItemId, Publisher, Payload),
+  	    case Result of
+  		default -> {result, Reply};
+--- 1877,1888 ----
+  	    NodeId = TNode#pubsub_node.id,
+  	    Type = TNode#pubsub_node.type,
+  	    Options = TNode#pubsub_node.options,
+! 	    BroadcastPayload = case Broadcast of
+! 		default -> Payload;
+! 		broadcast -> Payload;
+! 		PluginPayload -> PluginPayload
+! 	    end,
+! 	    broadcast_publish_item(Host, Node, NodeId, Type, Options, Removed, ItemId, jlib:jid_tolower(Publisher), BroadcastPayload),
+  	    set_cached_item(Host, NodeId, ItemId, Publisher, Payload),
+  	    case Result of
+  		default -> {result, Reply};
+***************
+*** 1922,1930 ****
+  		true ->
+  		    case create_node(Host, ServerHost, Node, Publisher, Type) of
+  			{result, [{xmlelement, "pubsub", [{"xmlns", ?NS_PUBSUB}],
+! 			  [{xmlelement, "create", [{"node", NewNode}], []}]}]} ->
+! 			    publish_item(Host, ServerHost,  list_to_binary(NewNode),
+! 				    Publisher, ItemId, Payload);
+  			_ ->
+  			    {error, ?ERR_ITEM_NOT_FOUND}
+  		    end;
+--- 1915,1922 ----
+  		true ->
+  		    case create_node(Host, ServerHost, Node, Publisher, Type) of
+  			{result, [{xmlelement, "pubsub", [{"xmlns", ?NS_PUBSUB}],
+!                                   [{xmlelement, "create", [{"node", NewNode}], []}]}]} ->
+! 			    publish_item(Host, ServerHost, list_to_binary(NewNode), Publisher, ItemId, Payload);
+  			_ ->
+  			    {error, ?ERR_ITEM_NOT_FOUND}
+  		    end;

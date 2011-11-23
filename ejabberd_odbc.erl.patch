@@ -1,0 +1,120 @@
+*** sources/ejabberd_2.1.x/src/odbc/ejabberd_odbc.erl	2011-11-23 01:37:21.000000000 +0100
+--- sources/ejabberd_mongo/src/odbc/ejabberd_odbc.erl	2011-11-23 01:39:29.000000000 +0100
+***************
+*** 5,11 ****
+  %%% Created :  8 Dec 2004 by Alexey Shchepin <alexey@process-one.net>
+  %%%
+  %%%
+! %%% ejabberd, Copyright (C) 2002-2011   ProcessOne
+  %%%
+  %%% This program is free software; you can redistribute it and/or
+  %%% modify it under the terms of the GNU General Public License as
+--- 5,11 ----
+  %%% Created :  8 Dec 2004 by Alexey Shchepin <alexey@process-one.net>
+  %%%
+  %%%
+! %%% ejabberd, Copyright (C) 2002-2010   ProcessOne
+  %%%
+  %%% This program is free software; you can redistribute it and/or
+  %%% modify it under the terms of the GNU General Public License as
+***************
+*** 40,46 ****
+  	 escape/1,
+  	 escape_like/1,
+  	 to_bool/1,
+! 	 keep_alive/1]).
+  
+  %% gen_fsm callbacks
+  -export([init/1,
+--- 40,47 ----
+  	 escape/1,
+  	 escape_like/1,
+  	 to_bool/1,
+! 	 keep_alive/1,
+! 	 get_db_type/0]).
+  
+  %% gen_fsm callbacks
+  -export([init/1,
+***************
+*** 72,77 ****
+--- 73,79 ----
+  -define(MAX_TRANSACTION_RESTARTS, 10).
+  -define(PGSQL_PORT, 5432).
+  -define(MYSQL_PORT, 3306).
++ -define(MONGO_PORT, 27017).
+  
+  -define(TRANSACTION_TIMEOUT, 60000). % milliseconds
+  -define(KEEPALIVE_TIMEOUT, 60000).
+***************
+*** 198,203 ****
+--- 200,207 ----
+  			 apply(fun mysql_connect/5, Args);
+  		     [pgsql | Args] ->
+  			 apply(fun pgsql_connect/5, Args);
++ 		     [mongo | Args] ->
++ 			 apply(fun mongo_connect/5, Args);
+  		     [odbc | Args] ->
+  			 apply(fun odbc_connect/1, Args)
+  		 end,
+***************
+*** 434,441 ****
+                    ?DEBUG("MySQL, Send query~n~p~n", [Query]),
+                    R = mysql_to_odbc(mysql_conn:fetch(State#state.db_ref,
+  						     Query, self())),
+!                   %% ?INFO_MSG("MySQL, Received result~n~p~n", [R]),
+!                   R
+            end,
+      case Res of
+  	{error, "No SQL-driver information available."} ->
+--- 438,450 ----
+                    ?DEBUG("MySQL, Send query~n~p~n", [Query]),
+                    R = mysql_to_odbc(mysql_conn:fetch(State#state.db_ref,
+  						     Query, self())),
+!                   ?DEBUG("MySQL, Received result~n~p~n", [R]),
+!                   R;		      
+! 	      mongo ->
+! 		  ?DEBUG("MongoDB, Send query~n~p~n", [Query]),
+! 		  R = mongosql_conn:fetch(State#state.db_ref, Query, false),
+! 		  ?DEBUG("MongoDB, Received result~n~p~n", [R]),
+! 		  R
+            end,
+      case Res of
+  	{error, "No SQL-driver information available."} ->
+***************
+*** 499,504 ****
+--- 508,518 ----
+  pgsql_item_to_odbc(_) ->
+      {updated,undefined}.
+  
++ %% == Native MongoDB code
++ 
++ mongo_connect(Server, Port, DB, Username, Password) ->
++     mongosql_conn:start(Server, Port, Username, Password, DB).
++ 
+  %% == Native MySQL code
+  
+  %% part of init/1
+***************
+*** 554,559 ****
+--- 568,578 ----
+  	    [mysql, Server, ?MYSQL_PORT, DB, User, Pass];
+  	{mysql, Server, Port, DB, User, Pass} when is_integer(Port) ->
+  	    [mysql, Server, Port, DB, User, Pass];
++ 	%% Default mongo port
++ 	{mongo, Server, DB, User, Pass} ->
++ 	    [mongo, Server, ?MONGO_PORT, DB, User, Pass];
++ 	{mongo, Server, Port, DB, User, Pass} when is_integer(Port) ->
++ 	    [mongo, Server, Port, DB, User, Pass];
+  	SQLServer when is_list(SQLServer) ->
+  	    [odbc, SQLServer]
+      end.
+***************
+*** 573,575 ****
+--- 592,598 ----
+  	_ ->
+  	    []
+      end.
++ 
++ get_db_type() ->
++     State = get(?STATE_KEY),
++     State#state.db_type.

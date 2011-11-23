@@ -1,0 +1,209 @@
+*** sources/ejabberd_2.1.x/src/mod_pubsub/mod_pubsub.erl	2011-11-23 01:37:21.000000000 +0100
+--- sources/ejabberd_mongo/src/mod_pubsub/mod_pubsub.erl	2011-11-23 01:37:38.000000000 +0100
+***************
+*** 11,21 ****
+  %%% under the License.
+  %%% 
+  %%% The Initial Developer of the Original Code is ProcessOne.
+! %%% Portions created by ProcessOne are Copyright 2006-2011, ProcessOne
+  %%% All Rights Reserved.''
+! %%% This software is copyright 2006-2011, ProcessOne.
+  %%%
+! %%% @copyright 2006-2011 ProcessOne
+  %%% @author Christophe Romain <christophe.romain@process-one.net>
+  %%%   [http://www.process-one.net/]
+  %%% @version {@vsn}, {@date} {@time}
+--- 11,21 ----
+  %%% under the License.
+  %%% 
+  %%% The Initial Developer of the Original Code is ProcessOne.
+! %%% Portions created by ProcessOne are Copyright 2006-2010, ProcessOne
+  %%% All Rights Reserved.''
+! %%% This software is copyright 2006-2010, ProcessOne.
+  %%%
+! %%% @copyright 2006-2010 ProcessOne
+  %%% @author Christophe Romain <christophe.romain@process-one.net>
+  %%%   [http://www.process-one.net/]
+  %%% @version {@vsn}, {@date} {@time}
+***************
+*** 1211,1217 ****
+        [{xmlcdata,
+  	translate:translate(Lang,
+  			    "ejabberd Publish-Subscribe module") ++
+! 			    "\nCopyright (c) 2004-2011 ProcessOne"}]}].
+  
+  iq_pubsub(Host, ServerHost, From, IQType, SubEl, Lang) ->
+      iq_pubsub(Host, ServerHost, From, IQType, SubEl, Lang, all, plugins(ServerHost)).
+--- 1211,1217 ----
+        [{xmlcdata,
+  	translate:translate(Lang,
+  			    "ejabberd Publish-Subscribe module") ++
+! 			    "\nCopyright (c) 2004-2010 ProcessOne"}]}].
+  
+  iq_pubsub(Host, ServerHost, From, IQType, SubEl, Lang) ->
+      iq_pubsub(Host, ServerHost, From, IQType, SubEl, Lang, all, plugins(ServerHost)).
+***************
+*** 2021,2034 ****
+  		    Features = features(Type),
+  		    PublishFeature = lists:member("publish", Features),
+  		    PublishModel = get_option(Options, publish_model),
+  		    DeliverPayloads = get_option(Options, deliver_payloads),
+  		    PersistItems = get_option(Options, persist_items),
+- 		    MaxItems = case PersistItems of
+- 			false -> 0;
+- 			true -> max_items(Host, Options)
+- 		    end,
+  		    PayloadCount = payload_xmlelements(Payload),
+! 		    PayloadSize = size(term_to_binary(Payload))-2, % size(term_to_binary([])) == 2
+  		    PayloadMaxSize = get_option(Options, max_payload_size),
+  		    % pubsub#deliver_payloads true 
+  		    % pubsub#persist_items true -> 1 item; false -> 0 item
+--- 2021,2031 ----
+  		    Features = features(Type),
+  		    PublishFeature = lists:member("publish", Features),
+  		    PublishModel = get_option(Options, publish_model),
++ 		    MaxItems = max_items(Host, Options),
+  		    DeliverPayloads = get_option(Options, deliver_payloads),
+  		    PersistItems = get_option(Options, persist_items),
+  		    PayloadCount = payload_xmlelements(Payload),
+! 		    PayloadSize = size(term_to_binary(Payload)),
+  		    PayloadMaxSize = get_option(Options, max_payload_size),
+  		    % pubsub#deliver_payloads true 
+  		    % pubsub#persist_items true -> 1 item; false -> 0 item
+***************
+*** 2064,2083 ****
+  	    NodeId = TNode#pubsub_node.id,
+  	    Type = TNode#pubsub_node.type,
+  	    Options = TNode#pubsub_node.options,
+! 	    case get_option(Options, deliver_notifications) of
+! 			true ->
+! 				BroadcastPayload = case Broadcast of
+! 					default -> Payload;
+! 					broadcast -> Payload;
+! 					PluginPayload -> PluginPayload
+! 				end,
+! 				broadcast_publish_item(Host, Node, NodeId, Type, Options,
+! 					Removed, ItemId, jlib:jid_tolower(Publisher),
+! 					BroadcastPayload);
+! 			false ->
+! 				ok
+! 		end,
+! 		set_cached_item(Host, NodeId, ItemId, Publisher, Payload),
+  	    case Result of
+  		default -> {result, Reply};
+  		_ -> {result, Result}
+--- 2061,2073 ----
+  	    NodeId = TNode#pubsub_node.id,
+  	    Type = TNode#pubsub_node.type,
+  	    Options = TNode#pubsub_node.options,
+! 	    BroadcastPayload = case Broadcast of
+! 		default -> Payload;
+! 		broadcast -> Payload;
+! 		PluginPayload -> PluginPayload
+! 	    end,
+! 	    broadcast_publish_item(Host, Node, NodeId, Type, Options, Removed, ItemId, jlib:jid_tolower(Publisher), BroadcastPayload),
+! 	    set_cached_item(Host, NodeId, ItemId, Publisher, Payload),
+  	    case Result of
+  		default -> {result, Reply};
+  		_ -> {result, Result}
+***************
+*** 2109,2117 ****
+  		true ->
+  		    case create_node(Host, ServerHost, Node, Publisher, Type) of
+  			{result, [{xmlelement, "pubsub", [{"xmlns", ?NS_PUBSUB}],
+! 			  [{xmlelement, "create", [{"node", NewNode}], []}]}]} ->
+! 			    publish_item(Host, ServerHost,  list_to_binary(NewNode),
+! 				    Publisher, ItemId, Payload);
+  			_ ->
+  			    {error, ?ERR_ITEM_NOT_FOUND}
+  		    end;
+--- 2099,2106 ----
+  		true ->
+  		    case create_node(Host, ServerHost, Node, Publisher, Type) of
+  			{result, [{xmlelement, "pubsub", [{"xmlns", ?NS_PUBSUB}],
+!                                    [{xmlelement, "create", [{"node", NewNode}], []}]}]} ->
+! 			    publish_item(Host, ServerHost, list_to_binary(NewNode), Publisher, ItemId, Payload);
+  			_ ->
+  			    {error, ?ERR_ITEM_NOT_FOUND}
+  		    end;
+***************
+*** 2329,2335 ****
+  %%	 Number = last | integer()
+  %% @doc <p>Resend the items of a node to the user.</p>
+  %% @todo use cache-last-item feature
+! send_items(Host, Node, NodeId, Type, {U,S,R} = LJID, last) ->
+      case get_cached_item(Host, NodeId) of
+  	undefined ->
+  	    send_items(Host, Node, NodeId, Type, LJID, 1);
+--- 2318,2324 ----
+  %%	 Number = last | integer()
+  %% @doc <p>Resend the items of a node to the user.</p>
+  %% @todo use cache-last-item feature
+! send_items(Host, Node, NodeId, Type, LJID, last) ->
+      case get_cached_item(Host, NodeId) of
+  	undefined ->
+  	    send_items(Host, Node, NodeId, Type, LJID, 1);
+***************
+*** 2338,2359 ****
+  	    Stanza = event_stanza_with_delay(
+  		[{xmlelement, "items", nodeAttr(Node),
+  		  itemsEls([LastItem])}], ModifNow, ModifUSR),
+! 	    case is_tuple(Host) of
+! 	        false ->
+! 	            ejabberd_router:route(service_jid(Host), jlib:make_jid(LJID), Stanza);
+! 	        true ->
+! 	            case ejabberd_sm:get_session_pid(U,S,R) of
+! 	                C2SPid when is_pid(C2SPid) ->
+! 	                    ejabberd_c2s:broadcast(C2SPid,
+! 	                        {pep_message, binary_to_list(Node)++"+notify"},
+! 	                        _Sender = service_jid(Host),
+! 	                        Stanza);
+! 	                _ ->
+! 	                    ok
+! 	            end
+! 	    end
+      end;
+! send_items(Host, Node, NodeId, Type, {U,S,R} = LJID, Number) ->
+      ToSend = case node_action(Host, Type, get_items, [NodeId, LJID]) of
+  	{result, []} -> 
+  	    [];
+--- 2327,2335 ----
+  	    Stanza = event_stanza_with_delay(
+  		[{xmlelement, "items", nodeAttr(Node),
+  		  itemsEls([LastItem])}], ModifNow, ModifUSR),
+! 	    ejabberd_router:route(service_jid(Host), jlib:make_jid(LJID), Stanza)
+      end;
+! send_items(Host, Node, NodeId, Type, LJID, Number) ->
+      ToSend = case node_action(Host, Type, get_items, [NodeId, LJID]) of
+  	{result, []} -> 
+  	    [];
+***************
+*** 2376,2395 ****
+  		[{xmlelement, "items", nodeAttr(Node),
+  		  itemsEls(ToSend)}])
+      end,
+!     case is_tuple(Host) of
+!         false ->
+!             ejabberd_router:route(service_jid(Host), jlib:make_jid(LJID), Stanza);
+!         true ->
+!             case ejabberd_sm:get_session_pid(U,S,R) of
+! 	                C2SPid when is_pid(C2SPid) ->
+! 	                    ejabberd_c2s:broadcast(C2SPid,
+! 	                        {pep_message, binary_to_list(Node)++"+notify"},
+! 	                        _Sender = service_jid(Host),
+! 	                        Stanza);
+! 	                _ ->
+! 	                    ok
+! 	            end
+!     end.
+  
+  %% @spec (Host, JID, Plugins) -> {error, Reason} | {result, Response}
+  %%	 Host = host()
+--- 2352,2358 ----
+  		[{xmlelement, "items", nodeAttr(Node),
+  		  itemsEls(ToSend)}])
+      end,
+!     ejabberd_router:route(service_jid(Host), jlib:make_jid(LJID), Stanza).
+  
+  %% @spec (Host, JID, Plugins) -> {error, Reason} | {result, Response}
+  %%	 Host = host()

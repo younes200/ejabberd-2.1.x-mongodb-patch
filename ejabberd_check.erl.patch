@@ -1,0 +1,38 @@
+*** sources/ejabberd_2.1.x/src/ejabberd_check.erl	2011-11-23 01:37:21.000000000 +0100
+--- sources/ejabberd_mongo/src/ejabberd_check.erl	2011-11-23 01:37:38.000000000 +0100
+***************
+*** 5,11 ****
+  %%% Created : 27 Feb 2008 by Mickael Remond <mremond@process-one.net>
+  %%%
+  %%%
+! %%% ejabberd, Copyright (C) 2002-2011   ProcessOne
+  %%%
+  %%% This program is free software; you can redistribute it and/or
+  %%% modify it under the terms of the GNU General Public License as
+--- 5,11 ----
+  %%% Created : 27 Feb 2008 by Mickael Remond <mremond@process-one.net>
+  %%%
+  %%%
+! %%% ejabberd, Copyright (C) 2002-2010   ProcessOne
+  %%%
+  %%% This program is free software; you can redistribute it and/or
+  %%% modify it under the terms of the GNU General Public License as
+***************
+*** 51,57 ****
+  check_database_module(mysql) ->
+      check_modules(mysql, [mysql, mysql_auth, mysql_conn, mysql_recv]);
+  check_database_module(pgsql) ->
+!     check_modules(pgsql, [pgsql, pgsql_proto, pgsql_tcp, pgsql_util]).
+  
+  %% @doc Issue a critical error and throw an exit if needing module is
+  %% missing.
+--- 51,59 ----
+  check_database_module(mysql) ->
+      check_modules(mysql, [mysql, mysql_auth, mysql_conn, mysql_recv]);
+  check_database_module(pgsql) ->
+!     check_modules(pgsql, [pgsql, pgsql_proto, pgsql_tcp, pgsql_util]);
+! check_database_module(mongo) ->
+!     check_modules(mongo, [mongosql_conn, mongosql_sem, sql92_parser, sql92_scan]).
+  
+  %% @doc Issue a critical error and throw an exit if needing module is
+  %% missing.

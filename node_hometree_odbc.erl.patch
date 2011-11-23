@@ -1,0 +1,315 @@
+*** sources/ejabberd_2.1.x/src/mod_pubsub/node_hometree_odbc.erl	2011-11-23 01:37:21.000000000 +0100
+--- sources/ejabberd_mongo/src/mod_pubsub/node_hometree_odbc.erl	2011-11-23 01:37:38.000000000 +0100
+***************
+*** 11,22 ****
+  %%% under the License.
+  %%% 
+  %%% The Initial Developer of the Original Code is ProcessOne.
+! %%% Portions created by ProcessOne are Copyright 2006-2011, ProcessOne
+  %%% All Rights Reserved.''
+! %%% This software is copyright 2006-2011, ProcessOne.
+  %%%
+  %%%
+! %%% @copyright 2006-2011 ProcessOne
+  %%% @author Christophe Romain <christophe.romain@process-one.net>
+  %%%   [http://www.process-one.net/]
+  %%% @version {@vsn}, {@date} {@time}
+--- 11,22 ----
+  %%% under the License.
+  %%% 
+  %%% The Initial Developer of the Original Code is ProcessOne.
+! %%% Portions created by ProcessOne are Copyright 2006-2010, ProcessOne
+  %%% All Rights Reserved.''
+! %%% This software is copyright 2006-2010, ProcessOne.
+  %%%
+  %%%
+! %%% @copyright 2006-2010 ProcessOne
+  %%% @author Christophe Romain <christophe.romain@process-one.net>
+  %%%   [http://www.process-one.net/]
+  %%% @version {@vsn}, {@date} {@time}
+***************
+*** 231,239 ****
+  create_node(NodeId, Owner) ->
+      OwnerKey = jlib:jid_tolower(jlib:jid_remove_resource(Owner)),
+      State = #pubsub_state{stateid = {OwnerKey, NodeId}, affiliation = owner},
+      catch ejabberd_odbc:sql_query_t(
+! 	    ["insert into pubsub_state(nodeid, jid, affiliation, subscriptions) "
+! 	     "values(", state_to_raw(NodeId, State), ");"]),
+      {result, {default, broadcast}}.
+  
+  %% @spec (Removed) -> ok
+--- 231,240 ----
+  create_node(NodeId, Owner) ->
+      OwnerKey = jlib:jid_tolower(jlib:jid_remove_resource(Owner)),
+      State = #pubsub_state{stateid = {OwnerKey, NodeId}, affiliation = owner},
++     I = randoms:get_string(),
+      catch ejabberd_odbc:sql_query_t(
+! 	    ["insert into pubsub_state(nodeid, jid, affiliation, subscriptions, stateid) "
+! 	     "values(", state_to_raw(NodeId, State), ", '", I,"');"]),
+      {result, {default, broadcast}}.
+  
+  %% @spec (Removed) -> ok
+***************
+*** 590,609 ****
+      GenKey = jlib:jid_remove_resource(SubKey),
+      H = ?PUBSUB:escape(Host),
+      J = encode_jid(GenKey),
+!     Reply = case catch ejabberd_odbc:sql_query_t(
+! 		 ["select node, type, i.nodeid, affiliation "
+! 		  "from pubsub_state i, pubsub_node n "
+! 		  "where i.nodeid = n.nodeid "
+! 		  "and jid='", J, "' "
+! 		  "and host='", H, "';"]) of
+! 	    {selected, ["node", "type", "nodeid", "affiliation"], RItems} ->
+! 		lists:map(fun({N, T, I, A}) ->
+! 		    Node = nodetree_tree_odbc:raw_to_node(Host, {N, "", T, I}),
+! 		    {Node, decode_affiliation(A)}
+! 		end, RItems);
+! 	    _ ->
+! 		[]
+!     end,
+      {result, Reply}.
+  
+  get_node_affiliations(NodeId) ->
+--- 591,619 ----
+      GenKey = jlib:jid_remove_resource(SubKey),
+      H = ?PUBSUB:escape(Host),
+      J = encode_jid(GenKey),
+!     Result = case ejabberd_odbc:get_db_type() of
+!                  mongo -> 
+!                      Query1 = ["select node, type, nodeid from pubsub_node where host='", H, "';"],
+!                      Query2 = ["select nodeid, affiliation from pubsub_state where jid='", J, "';"],
+!                      catch mongosql_join:natural(ejabberd_odbc:sql_query_t(Query1),
+!                                                  ejabberd_odbc:sql_query_t(Query2));
+!                  _Else ->
+!                      catch ejabberd_odbc:sql_query_t(
+!                              ["select node, type, i.nodeid, affiliation "
+!                               "from pubsub_state i, pubsub_node n "
+!                               "where i.nodeid = n.nodeid "
+!                               "and jid='", J, "' "
+!                               "and host='", H, "';"])
+!              end,
+!     Reply = case Result of
+!                 {selected, ["node", "type", "nodeid", "affiliation"], RItems} ->
+!                     lists:map(fun({N, T, I, A}) ->
+!                                       Node = nodetree_tree_odbc:raw_to_node(Host, {N, "", T, I}),
+!                                       {Node, decode_affiliation(A)}
+!                               end, RItems);
+!                 _ ->
+!                     []
+!             end,
+      {result, Reply}.
+  
+  get_node_affiliations(NodeId) ->
+***************
+*** 657,677 ****
+      H = ?PUBSUB:escape(Host),
+      SJ = encode_jid(SubKey),
+      GJ = encode_jid(GenKey),
+!     Query = case SubKey of
+! 	GenKey ->
+! 	    ["select node, type, i.nodeid, jid, subscriptions "
+! 	     "from pubsub_state i, pubsub_node n "
+! 	     "where i.nodeid = n.nodeid "
+! 	     "and jid like '", GJ, "%' "
+! 	     "and host='", H, "';"];
+! 	_ ->
+! 	    ["select node, type, i.nodeid, jid, subscriptions "
+! 	     "from pubsub_state i, pubsub_node n "
+! 	     "where i.nodeid = n.nodeid "
+! 	     "and jid in ('", SJ, "', '", GJ, "') "
+! 	     "and host='", H, "';"]
+!     end,
+!     Reply = case catch ejabberd_odbc:sql_query_t(Query) of
+  	{selected, ["node", "type", "nodeid", "jid", "subscriptions"], RItems} ->
+  	    lists:foldl(fun({N, T, I, J, S}, Acc) ->
+  		Node = nodetree_tree_odbc:raw_to_node(Host, {N, "", T, I}),
+--- 667,706 ----
+      H = ?PUBSUB:escape(Host),
+      SJ = encode_jid(SubKey),
+      GJ = encode_jid(GenKey),
+!     Result = case ejabberd_odbc:get_db_type() of
+!                  mongo -> 
+!                      {Query1, Query2} = case SubKey of
+!                                             GenKey ->
+!                                                 {["select node, type, nodeid "
+!                                                   "from pubsub_node where host='", H, "';"],
+!                                                  ["select nodeid, jid, subscriptions "
+!                                                   "from pubsub_state where jid like '", GJ, "%';"]};
+!                                             _ ->
+!                                                 {["select node, type, nodeid from "
+!                                                   "pubsub_node where host='", H, "';"],
+!                                                  ["select nodeid, jid, subscriptions from "
+!                                                   "pubsub_state where jid in ('", SJ, "', '", GJ, "');"]}
+!                                         end,
+!                      catch mongosql_join:natural(ejabberd_odbc:sql_query_t(Query1),
+!                                                  ejabberd_odbc:sql_query_t(Query2));
+!                  _Else -> 
+!                      Query = case SubKey of
+!                                  GenKey ->
+!                                      ["select node, type, i.nodeid, jid, subscriptions "
+!                                       "from pubsub_state i, pubsub_node n "
+!                                       "where i.nodeid = n.nodeid "
+!                                       "and jid like '", GJ, "%' "
+!                                       "and host='", H, "';"];
+!                                  _ ->
+!                                      ["select node, type, i.nodeid, jid, subscriptions "
+!                                       "from pubsub_state i, pubsub_node n "
+!                                       "where i.nodeid = n.nodeid "
+!                                       "and jid in ('", SJ, "', '", GJ, "') "
+!                                       "and host='", H, "';"]
+!                              end,
+!                      catch ejabberd_odbc:sql_query_t(Query)
+!              end,
+!     Reply = case Result of
+  	{selected, ["node", "type", "nodeid", "jid", "subscriptions"], RItems} ->
+  	    lists:foldl(fun({N, T, I, J, S}, Acc) ->
+  		Node = nodetree_tree_odbc:raw_to_node(Host, {N, "", T, I}),
+***************
+*** 699,721 ****
+      H = ?PUBSUB:escape(Host),
+      SJ = encode_jid(SubKey),
+      GJ = encode_jid(GenKey),
+!     Query = case SubKey of
+! 	GenKey ->
+! 	    ["select node, type, i.nodeid, jid, subscriptions "
+! 	     "from pubsub_state i, pubsub_node n, pubsub_node_option o "
+! 	     "where i.nodeid = n.nodeid and n.nodeid = o.nodeid "
+! 	     "and name='send_last_published_item' and val='on_sub_and_presence' "
+! 	     "and jid like '", GJ, "%' "
+! 	     "and host='", H, "';"];
+! 	_ ->
+! 	    ["select node, type, i.nodeid, jid, subscriptions "
+! 	     "from pubsub_state i, pubsub_node n, pubsub_node_option o "
+! 	     "where i.nodeid = n.nodeid and n.nodeid = o.nodeid "
+! 	     "and name='send_last_published_item' and val='on_sub_and_presence' "
+! 	     "and jid in ('", SJ, "', '", GJ, "') "
+! 	     "and host='", H, "';"]
+!     end,
+!     Reply = case catch ejabberd_odbc:sql_query_t(Query) of
+  	{selected, ["node", "type", "nodeid", "jid", "subscriptions"], RItems} ->
+  	    lists:foldl(fun({N, T, I, J, S}, Acc) ->
+  		Node = nodetree_tree_odbc:raw_to_node(Host, {N, "", T, I}),
+--- 728,783 ----
+      H = ?PUBSUB:escape(Host),
+      SJ = encode_jid(SubKey),
+      GJ = encode_jid(GenKey),
+!     Result = case ejabberd_odbc:get_db_type() of
+!                  mongo -> 
+!                      {Query1, Query2, Query3} = case SubKey of
+!                                                     GenKey ->
+!                                                         {["select node, type, nodeid "
+!                                                           "from pubsub_node "
+!                                                           "where host='", H, "';"],
+!                                                          ["select nodeid, jid, subscriptions "
+!                                                           "from pubsub_state "
+!                                                           "where jid like '", GJ, "%';"],
+!                                                          ["select nodeid "
+!                                                           "from pubsub_node_option "
+!                                                           "where name='send_last_published_item' "
+!                                                           "and val='on_sub_and_presence';"]};
+!                                                     _ -> 
+!                                                         {["select node, type, nodeid "
+!                                                           "from pubsub_node "
+!                                                           "where host='", H, "';"],
+!                                                          ["select nodeid, jid, subscriptions "
+!                                                           "from pubsub_state "
+!                                                           "where jid in ('", SJ, "', '", GJ, "');"],
+!                                                          ["select nodeid "
+!                                                           "from pubsub_node_option "
+!                                                           "where name='send_last_published_item' "
+!                                                           "and val='on_sub_and_presence';"]}
+!                                                 end,
+!                      catch mongosql_join:natural(mongosql_join:natural(
+!                                                    ejabberd_odbc:sql_query_t(Query1), 
+!                                                    ejabberd_odbc:sql_query_t(Query2)),
+!                                                  ejabberd_odbc:sql_query_t(Query3));
+!                  _Else ->
+!                      Query = case SubKey of
+!                                  GenKey ->
+!                                      ["select node, type, i.nodeid, jid, subscriptions "
+!                                       "from pubsub_state i, pubsub_node n, pubsub_node_option o "
+!                                       "where i.nodeid = n.nodeid and n.nodeid = o.nodeid "
+!                                       "and name='send_last_published_item' and val='on_sub_and_presence' "
+!                                       "and jid like '", GJ, "%' "
+!                                       "and host='", H, "';"];
+!                                  _ ->
+!                                      ["select node, type, i.nodeid, jid, subscriptions "
+!                                       "from pubsub_state i, pubsub_node n, pubsub_node_option o "
+!                                       "where i.nodeid = n.nodeid and n.nodeid = o.nodeid "
+!                                       "and name='send_last_published_item' and val='on_sub_and_presence' "
+!                                       "and jid in ('", SJ, "', '", GJ, "') "
+!                                       "and host='", H, "';"]
+!                              end,
+!                      catch ejabberd_odbc:sql_query_t(Query)
+!              end,
+!     Reply = case Result of
+  	{selected, ["node", "type", "nodeid", "jid", "subscriptions"], RItems} ->
+  	    lists:foldl(fun({N, T, I, J, S}, Acc) ->
+  		Node = nodetree_tree_odbc:raw_to_node(Host, {N, "", T, I}),
+***************
+*** 944,952 ****
+  	{updated, 1} ->
+  	    ok;
+  	_ ->
+  	    catch ejabberd_odbc:sql_query_t(
+! 		    ["insert into pubsub_state(nodeid, jid, affiliation, subscriptions) "
+! 		     "values('", NodeId, "', '", J, "', '", A, "', '", S, "');"])
+      end,
+      {result, []}.
+  
+--- 1006,1015 ----
+  	{updated, 1} ->
+  	    ok;
+  	_ ->
++             I = randoms:get_string(),
+  	    catch ejabberd_odbc:sql_query_t(
+! 		    ["insert into pubsub_state(nodeid, jid, affiliation, subscriptions, stateid) "
+! 		     "values('", NodeId, "', '", J, "', '", A, "', '", S, "', '", I, "');"])
+      end,
+      {result, []}.
+  
+***************
+*** 1292,1300 ****
+  	{updated, 1} ->
+  	    ok;
+  	_ ->
+  	    catch ejabberd_odbc:sql_query_t(
+! 		    ["insert into pubsub_state(nodeid, jid, affiliation, subscriptions) "
+! 		     "values('", NodeId, "', '", J, "', '", A, "', '');"])
+      end.
+  
+  update_subscription(NodeId, JID, Subscription) ->
+--- 1355,1364 ----
+  	{updated, 1} ->
+  	    ok;
+  	_ ->
++             I = randoms:get_string(),
+  	    catch ejabberd_odbc:sql_query_t(
+! 		    ["insert into pubsub_state(nodeid, jid, affiliation, stateid, subscriptions) "
+! 		     "values('", NodeId, "', '", J, "', '", A, "', '", I, "', '');"])
+      end.
+  
+  update_subscription(NodeId, JID, Subscription) ->
+***************
+*** 1307,1315 ****
+  	{updated, 1} ->
+  	    ok;
+  	_ ->
+  	    catch ejabberd_odbc:sql_query_t(
+! 		    ["insert into pubsub_state(nodeid, jid, affiliation, subscriptions) "
+! 		     "values('", NodeId, "', '", J, "', 'n', '", S, "');"])
+      end.
+  
+  decode_jid(SJID) -> jlib:jid_tolower(jlib:string_to_jid(SJID)).
+--- 1371,1380 ----
+  	{updated, 1} ->
+  	    ok;
+  	_ ->
++             I = randoms:get_string(),
+  	    catch ejabberd_odbc:sql_query_t(
+! 		    ["insert into pubsub_state(nodeid, jid, affiliation, subscriptions, stateid) "
+! 		     "values('", NodeId, "', '", J, "', 'n', '", S, "', '", I, "');"])
+      end.
+  
+  decode_jid(SJID) -> jlib:jid_tolower(jlib:string_to_jid(SJID)).
