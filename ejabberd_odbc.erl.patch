@@ -1,5 +1,5 @@
 *** sources/ejabberd_2.1.x/src/odbc/ejabberd_odbc.erl	2011-11-23 01:37:21.000000000 +0100
---- sources/ejabberd_mongo/src/odbc/ejabberd_odbc.erl	2011-11-23 01:39:29.000000000 +0100
+--- sources/ejabberd_mongo/src/odbc/ejabberd_odbc.erl	2011-11-23 19:49:00.000000000 +0100
 ***************
 *** 5,11 ****
   %%% Created :  8 Dec 2004 by Alexey Shchepin <alexey@process-one.net>
@@ -74,7 +74,7 @@
 !                   R;		      
 ! 	      mongo ->
 ! 		  ?DEBUG("MongoDB, Send query~n~p~n", [Query]),
-! 		  R = mongosql_conn:fetch(State#state.db_ref, Query, false),
+! 		  R = mongosql_conn:fetch(State#state.db_ref, Query, true),
 ! 		  ?DEBUG("MongoDB, Received result~n~p~n", [R]),
 ! 		  R
             end,
